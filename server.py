@@ -131,6 +131,37 @@ class Server:
 		lock.release()
 
 	# thread safe
+	def save_existing_user_new_credentials(self, new_details, old_username):
+		lock = Lock()
+		lock.acquire()
+
+		temporary_user_list_from_json = []
+
+		if os.path.exists('usersDB.json'):
+			with open('usersDB.json') as json_file:
+				temporary_user_list_from_json = json.load(json_file)
+
+				for user in temporary_user_list_from_json:
+					curr_username = user.get("username")
+					if curr_username == old_username:
+						temporary_user_list_from_json.remove(user)
+						break
+
+				temporary_user_list_from_json.append(new_details)
+
+				with open('usersDB.json', 'w')as json_file:
+					json.dump(temporary_user_list_from_json, json_file)
+				temporary_user_list_from_json = []
+		else:
+			temporary_user_list_from_json.append(new_details)
+			with open('usersDB.json', 'w') as json_file:
+				json.dump(temporary_user_list_from_json, json_file)
+			temporary_user_list_from_json = []
+
+		lock.release()
+
+
+	# thread safe
 	def save_user_credentials(self, user):
 		lock = Lock()
 		lock.acquire()
@@ -227,6 +258,7 @@ class UIText(Enum):
 	SIGN_IN = "Sign in"
 	SIGN_UP = "Sign up"
 	EXIT = "Exit"
+	SAVE = "Save"
 
 
 """UTILITY FUNCTIONS"""
@@ -326,8 +358,91 @@ def is_the_reply_exit(client_reply):
 	return True if client_reply == UIText.EXIT.value else False
 
 
-def handle_logged_user(client_socket, address,username_logged):
+def handle_profile(client_reply, client_socket, address, username_logged):
+	ack = ServerResponseStatus.ACK.value
+	client_socket.send(encode_utf_8(ack))
+	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+
+	profile_loop = True
+	while profile_loop is True:
+		# W8ING FOR THE SAVE BUTTONS + NEW DETAILS
+		decoded_message  = decode_utf_8(client_socket.recv(1024))
+		client_reply_splitted = decoded_message.split("-")
+		server.list_of_logs.append("	({}) {}:{} --> Profile changed. New credential sent".format(get_date_and_hour(), address[0], address[1]))
+
+
+		if is_the_reply_ctrlc(decoded_message):
+			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
+			server.remove_connection(address[0], address[1])
+			profile_loop = False
+
+		elif client_reply_splitted[0] == UIText.SAVE.value:
+
+			splitted_details = client_reply_splitted[1].split(";")
+
+			username = splitted_details[0]
+			password = splitted_details[1]
+			gender = splitted_details[2]
+			age = splitted_details[3]
+			email = splitted_details[4]
+
+			new_user_details = {
+				"username": username,
+				"password": password,
+				"gender": gender,
+				"age": age,
+				"email": email
+			}
+
+			profile_loop = False
+			indexs_wrong_field = []
+			if is_valid_format(username) or len(username) == 0:
+				profile_loop = True
+				indexs_wrong_field.append(0)
+			if len(password) == 0:
+				profile_loop = True
+				indexs_wrong_field.append(1)
+			if is_valid_format(gender) or gender.isdigit():
+				profile_loop = True
+				indexs_wrong_field.append(2)
+			if not age.isdigit() and len(age) is not 0:
+				profile_loop = True
+				indexs_wrong_field.append(3)
+			if not is_valid_email(email):
+				profile_loop = True
+				indexs_wrong_field.append(4)
+
+			if profile_loop is True:
+				server.list_of_logs.append("	({}) {}:{} <-- Wrong new credentials received.".format(get_date_and_hour(),address[0], address[1]))
+
+				wrongdetails = ServerResponseStatus.WRONG_USER_DETAILS.value
+				formatted_indexs_wrong_field = str("-".join(map(str, indexs_wrong_field)))
+				msg = []
+				msg.append(wrongdetails)
+				msg.append(formatted_indexs_wrong_field)
+				serverMessage = str(";".join(map(str, msg)))
+				client_socket.send(encode_utf_8(serverMessage))
+
+			elif not server.is_already_signed(new_user_details.get("username"), new_user_details.get("password")):
+				server.save_existing_user_new_credentials(new_user_details, username_logged)
+
+				ack = ServerResponseStatus.ACK.value
+				client_socket.send(encode_utf_8(ack))
+				server.list_of_logs.append("	({}) {}:{} <-- New credentials saved.".format(get_date_and_hour(), address[0],address[1],))
+
+				profile_loop = False
+
+			else:
+				already_signed = ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value
+				client_socket.send(encode_utf_8(already_signed))
+				server.list_of_logs.append("	({}) {}:{} <-- New credential not saved - Username or email already exists.".format(get_date_and_hour(), address[0], address[1]))
+
+				profile_loop = True
+
+
+def handle_home(client_socket, address, username_logged):
 	logged_loop = True
+
 	while logged_loop is True:
 
 		client_reply = client_socket.recv(1024)
@@ -357,21 +472,22 @@ def handle_logged_user(client_socket, address,username_logged):
 				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 			if decode_utf_8(client_reply) == UIText.PROFILE.value:
-				ack = ServerResponseStatus.ACK.value
-				client_socket.send(encode_utf_8(ack))
-				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format( get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+
+				handle_profile(client_reply, client_socket, address, username_logged)
+				server.remove_user_from_online_list(username_logged)
+				logged_loop = False
 
 			if decode_utf_8(client_reply) == UIText.LOGOUT.value:
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
-				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format( get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 				server.remove_user_from_online_list(username_logged)
 				logged_loop = False
 	return
 
 
-def handle_user_sign_up(client_reply,client_socket, address):
+def handle_sign_up(client_reply, client_socket, address):
 	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 	ack = ServerResponseStatus.ACK.value
@@ -383,6 +499,7 @@ def handle_user_sign_up(client_reply,client_socket, address):
 
 		client_reply = client_socket.recv(1024)
 		server.list_of_logs.append("	({}) {}:{} --> Sign up details sent.".format(get_date_and_hour(), address[0], address[1]))
+
 		if is_the_reply_ctrlc(decode_utf_8(client_reply)):
 			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
 			server.remove_connection(address[0], address[1])
@@ -390,6 +507,7 @@ def handle_user_sign_up(client_reply,client_socket, address):
 
 		else:
 			splitted_details = decode_utf_8(client_reply).split(";")
+
 			username = splitted_details[0]
 			password = splitted_details[1]
 			gender = splitted_details[2]
@@ -452,7 +570,7 @@ def handle_user_sign_up(client_reply,client_socket, address):
 					sign_up_loop = True
 
 
-def handle_user_sign_in(client_reply, client_socket, address):
+def handle_sign_in(client_reply, client_socket, address):
 	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 	ack = ServerResponseStatus.ACK.value
@@ -474,7 +592,6 @@ def handle_user_sign_in(client_reply, client_socket, address):
 		username = splitted_credential[0]
 		password = splitted_credential[1]
 
-
 		if server.validate_user(username, password):
 
 			if server.is_user_online(username):
@@ -495,12 +612,12 @@ def handle_user_sign_in(client_reply, client_socket, address):
 			return None
 
 
-def handle_user_ctrlc_command(address):
+def handle_client_ctrlc_request(address):
 	server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1]))
 	server.remove_connection(address[0], address[1])
 
 
-def handle_user_exit_request(address):
+def handle_client_exit_request(address):
 	server.list_of_logs.append("	({}) {}:{} --> DISCONNECTED.".format(get_date_and_hour(), address[0], address[1]))
 	server.remove_connection(address[0], address[1])
 
@@ -530,22 +647,22 @@ def handle_client_connection(client_socket, address):
 			client_replay = client_socket.recv(1024)
 
 			if is_the_reply_ctrlc(decode_utf_8(client_replay)):
-				handle_user_ctrlc_command(address)
+				handle_client_ctrlc_request(address)
 				current_client_running = False
 
-			if is_the_reply_exit(decode_utf_8(client_replay)):
-				handle_user_exit_request(address)
+			elif is_the_reply_exit(decode_utf_8(client_replay)):
+				handle_client_exit_request(address)
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
 				current_client_running = False
 
 			elif UIText.SIGN_UP.value == decode_utf_8(client_replay):
-				handle_user_sign_up(client_replay, client_socket, address)
+				handle_sign_up(client_replay, client_socket, address)
 
 			elif UIText.SIGN_IN.value == decode_utf_8(client_replay):
-				username_logged = handle_user_sign_in(client_replay, client_socket, address)
+				username_logged = handle_sign_in(client_replay, client_socket, address)
 				if username_logged:
-					handle_logged_user(client_socket, address,username_logged)
+					handle_home(client_socket, address, username_logged)
 
 	except socket.error as sock_er:
 		handle_exception_caught(address, sock_er)

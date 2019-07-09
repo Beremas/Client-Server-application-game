@@ -76,6 +76,7 @@ class UIText(Enum):
     SIGN_IN = "Sign in"
     SIGN_UP = "Sign up"
     EXIT = "Exit"
+    SAVE = "Save"
 
 
 """UTILITY FUNCTIONS"""
@@ -148,11 +149,13 @@ def init_curses_attributes():
 
 """HANDLER FUNCTIONS"""
 
+
 def send_nicer_good_bye():
     nice_good_bye_message = "CTRL+C"
     client.socket.send(encode_utf_8(nice_good_bye_message))
     client.close_my_connection()
     stdscr = reset_curses_options()
+
 
 def sigint_handler(signum,frame):
     send_nicer_good_bye()
@@ -162,7 +165,7 @@ def sigint_handler(signum,frame):
 """EMBEDDED FUNCTIONS"""
 
 
-def select_option(attributes, screen_options,screen_title, screen_marked_line):
+def select_option(attributes, screen_options, screen_title, screen_marked_line):
     last_char_read = 0  # last character read
     #screen_marked_line = 0  # the current option that is marked
     while last_char_read != 10:  # Enter in ascii
@@ -184,49 +187,104 @@ def select_option(attributes, screen_options,screen_title, screen_marked_line):
     return screen_marked_line
 
 
-def load_user_profile(logged_user):
-    logged_user_profile = {}
-    # TODO: [...]
+def profile_screen():
 
-    return logged_user_profile
-
-def run_user_profile_screen():
     login_color_attributes = init_curses_attributes()
 
     screen_title = "Profile area"
-    screen_options = ["Username(*)", "Password(*)", "Gender", "Age", "Email(*)", "Save"]
-    screen_option_index = -1
-    last_option_pressed = 0
+    screen_options = ["Username(*) = " + user_details.username, "Password(*) = " + user_details.password, "Gender = " + user_details.gender, "Age = " + user_details.age, "Email(*) = " + user_details.email, "Save"]
 
-    while screen_option_index != screen_options.index("Save"):
-        screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
-        last_option_pressed = screen_option_index
+    username = user_details.username
+    password = user_details.password
+    gender = user_details.gender
+    age = user_details.age
+    email = user_details.email
 
-        curses.echo()
-        stdscr.keypad(False)
-        curses.curs_set(2)
+    loop_for_the_correct_details = True
 
-        if screen_option_index == screen_options.index("Username(*)"):
-            username = decode_utf_8(stdscr.getstr(2, 15, 30))
-            new_string = "Username(*) = {}".format(username)
-            screen_options[0] = new_string
-        elif screen_option_index == screen_options.index("Password(*)"):
-            password = stdscr.getstr(3, 15, 30)
-        elif screen_option_index == screen_options.index("Gender"):
-            gender = stdscr.getstr(4, 10, 30)
-        elif screen_option_index == screen_options.index("Age"):
-            age = stdscr.getstr(5, 7, 30)
-        elif screen_option_index == screen_options.index("Email(*)"):
-            email = stdscr.getstr(6, 12, 30)
+    while loop_for_the_correct_details:
 
-        curses.noecho()
-        curses.curs_set(0)
-        stdscr.keypad(True)
+        screen_option_index = -1
+        last_option_pressed = 0
 
-def run_user_logged_screen():
+        while screen_option_index != screen_options.index("Save"):
+            screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
+            last_option_pressed = screen_option_index
+
+            curses.echo()
+            stdscr.keypad(False)
+            curses.curs_set(2)
+
+            if screen_option_index == screen_options.index(screen_options[0]):
+                username = decode_utf_8(stdscr.getstr(2, 17, 30)).strip()
+                screen_options[0] = "Username(*)" + " = " + username
+
+            elif screen_option_index == screen_options.index(screen_options[1]):
+                password = decode_utf_8(stdscr.getstr(3, 17, 30)).strip()
+                screen_options[1] = "Password(*)" + " = " + password
+
+            elif screen_option_index == screen_options.index(screen_options[2]):
+                gender = decode_utf_8(stdscr.getstr(4, 12, 30)).strip()
+                screen_options[2] = "Gender" + " = " + gender
+
+            elif screen_option_index == screen_options.index(screen_options[3]):
+                age = decode_utf_8(stdscr.getstr(5, 9, 30)).strip()
+                screen_options[3] = "Age" + " = " + age
+
+            elif screen_option_index == screen_options.index(screen_options[4]):
+                email = decode_utf_8(stdscr.getstr(6, 14, 30)).strip()
+                screen_options[4] = "Email(*)" + " = " + email
+
+            curses.noecho()
+            curses.curs_set(0)
+            stdscr.keypad(True)
+
+        new_details = []
+        new_details.append(username)
+        new_details.append(password)
+        new_details.append(gender)
+        new_details.append(age)
+        new_details.append(email)
+
+        formatted_credentials = str(";".join(map(str, new_details)))
+        message_for_the_server = UIText.SAVE.value + "-" + formatted_credentials
+
+        client.socket.send(encode_utf_8(message_for_the_server))
+
+        server_reply = client.socket.recv(1024)
+
+        if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value:
+            print_message_and_press_enter_to_continue("\nNew details saved.")
+            loop_for_the_correct_details = False
+        elif decode_utf_8(server_reply) == ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value:
+            print_message_and_press_enter_to_continue("\nThis username or email already exists.")
+            loop_for_the_correct_details = True
+        else:
+            decoded_message = decode_utf_8(server_reply)
+            splitted_message = decoded_message.split(";")
+            if splitted_message[0] == ServerResponseStatus.WRONG_USER_DETAILS.value:
+                stdscr.addstr("\n\nServer response:")
+                if "0" in splitted_message[1]:
+                    stdscr.addstr("\n - Username: No special chars or spaces are allowed")
+                if "1" in splitted_message[1]:
+                    stdscr.addstr("\n - Password: No empty string allowed")
+                if "2" in splitted_message[1]:
+                    stdscr.addstr("\n - Gender: can't contains special chars or digits")
+                if "3" in splitted_message[1]:
+                    stdscr.addstr("\n - Age: digits only.")
+                if "4" in splitted_message[1]:
+                    stdscr.addstr("\n - Email: wrong format. (i.e.: example@example2.com)")
+
+                print_message_and_press_enter_to_continue("\n\nPress ENTER..")
+                loop_for_the_correct_details = True
+
+    return True
+
+
+def home_screen():
     login_color_attributes = init_curses_attributes()
 
-    screen_title = "Hi " + logged_user.username
+    screen_title = "Hi " + user_details.username
     screen_options = [UIText.PLAY_NEW_GAME.value, UIText.PLAY_COOP_GAME.value, UIText.CONTINUE_GAME.value, UIText.PROFILE.value, UIText.LOGOUT.value]
     screen_option_index = -1
     last_option_pressed = 0
@@ -252,13 +310,18 @@ def run_user_logged_screen():
             print_message_and_press_enter_to_continue("Continue game - pressed\nPress ENTER to continue..")
 
         if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PROFILE.value):
-            run_user_profile_screen()
-            #print_message_and_press_enter_to_continue("Profile - pressed\nPress ENTER to continue..")
+
+            need_disconnect_and_reconnect = profile_screen()
+            if need_disconnect_and_reconnect:
+                print_message_and_press_enter_to_continue("\nYou need to Sign in again in order to use use your changes. You will be redirected on the main screen.")
+                screen_option_index = 4
+
+
 
 
         #TODO: [...]
 
-    logged_user.reset_user()
+    user_details.reset_user()
 
 
 def get_sign_up_details():
@@ -325,7 +388,7 @@ def get_sign_in_details():
     return credentials
 
 
-def run_sign_in_screen():
+def sign_in_screen():
     credentials =get_sign_in_details()
 
     client.socket.send(encode_utf_8(credentials))
@@ -347,13 +410,14 @@ def run_sign_in_screen():
     if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value:
         stdscr.addstr("\nCredentials accepted!")
         print_message_and_press_enter_to_continue("\nPress ENTER..")
+
         splitted_credentials = credentials.split(";")
-        logged_user.username = splitted_credentials[0]
+        user_details.username = splitted_credentials[0]
 
         return True
 
 
-def run_sign_up_screen(server_reply):
+def sign_up_screen(server_reply):
     while decode_utf_8(server_reply) != ServerResponseStatus.SIGNED.value:
 
         new_user_details = get_sign_up_details()
@@ -369,7 +433,7 @@ def run_sign_up_screen(server_reply):
         if server_response_splitted[0] == ServerResponseStatus.WRONG_USER_DETAILS.value:
             stdscr.addstr("\n\nServer response:")
             if "0" in server_response_splitted[1]:
-                stdscr.addstr("\n - Username: No special chars or empty string allowed")
+                stdscr.addstr("\n - Username: No special chars or spaces are allowed")
             if "1" in server_response_splitted[1]:
                 stdscr.addstr("\n - Password: No empty string allowed")
             if "2" in server_response_splitted[1]:
@@ -411,12 +475,11 @@ def run_client():
             server_reply = client.socket.recv(1024)
 
             if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_IN.value):
-                server_response = run_sign_in_screen()
-                if server_response:
-                    run_user_logged_screen()
+                if sign_in_screen():
+                    home_screen()
 
             elif decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_UP.value):
-                run_sign_up_screen(server_reply)
+                sign_up_screen(server_reply)
 
             elif decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.EXIT.value):
                 pass
@@ -451,7 +514,7 @@ try:
     client.start_socket(args)
     client.connect_to_server(args.ip, int(args.port))
 
-    logged_user = ProfileUser()
+    user_details = ProfileUser()
 
     run_client()
 
