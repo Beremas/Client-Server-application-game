@@ -23,7 +23,7 @@ class Client:
 
 
     def start_socket(self, args):
-        self.startedat = datetime.today().strftime('%d-%d-%Y %H-%M-%S')
+        self.startedat = get_date_and_hour()
         self.closedat = ""
         self.server_ip = args.ip
         self.server_port = int(args.port)
@@ -35,7 +35,7 @@ class Client:
     def connect_to_server(self, ip, port):
         self.socket.connect((ip, port))
 
-class LoggedUser:
+class ProfileUser:
     def __init__(self):
         self.username = ""
         self.password = ""
@@ -43,12 +43,20 @@ class LoggedUser:
         self.age = ""
         self.email = ""
 
-    def reset_logged_user(self):
+    def reset_user(self):
         self.username = ""
         self.password = ""
         self.gender = ""
         self.age = ""
         self.email = ""
+
+
+class GameStats:
+    def __init__(self):
+        self.username = ""
+        self.life_points = ""
+        self.kills = ""
+        # [...]
 
 class ServerResponseStatus(Enum):
     ACK = "Acknowledge"
@@ -70,6 +78,9 @@ class UIText(Enum):
 
 
 """UTILITY FUNCTIONS"""
+
+def get_date_and_hour():
+	return datetime.today().strftime('%d-%d-%Y %H-%M-%S')
 
 def print_message_and_press_enter_to_continue(message):
     enter_pressed = False
@@ -107,6 +118,8 @@ def init_curses_options():
     curses.cbreak()
     # Enable easy key codes (will come back to this)
     stdscr.keypad(True)
+    # Removue blinkin cursor
+    curses.curs_set(0);
 
     init_curses_color_sets()
 
@@ -133,7 +146,7 @@ def sigint_handler(signum,frame):
 
     nice_good_bye_message = "CTRL+C"
 
-    client.socket.send(nice_good_bye_message.encode("utf-8"))
+    client.socket.send(encode_utf_8(nice_good_bye_message))
 
     client.close_my_connection()
 
@@ -142,14 +155,9 @@ def sigint_handler(signum,frame):
     exit(1)
 
 
-"""SOCKET FUNCTIONS"""
-
-
-
 """EMBEDDED FUNCTIONS"""
 
 def select_option(attributes, screen_options,screen_title):
-
     last_char_read = 0  # last character read
     screen_marked_line = 0  # the current option that is marked
     while last_char_read != 10:  # Enter in ascii
@@ -209,7 +217,7 @@ def run_user_logged_screen():
 
         #TODO: [...]
 
-    logged_user.reset_logged_user()
+    logged_user.reset_user()
 
 def get_sign_up_details():
 
@@ -218,9 +226,10 @@ def get_sign_up_details():
     stdscr.addstr("Register your details here. Fields with (*) are necessaries.\n\n", curses.A_UNDERLINE)
 
 
-    curses.echo()  # Enable echoing of characters
-    stdscr.keypad(False) # map arrow keys to special values
-    # Get a 30-character string, with the cursor on the top line
+    curses.echo()
+    stdscr.keypad(False)
+    curses.curs_set(2)
+
 
     stdscr.addstr("Username(*): \n")
     stdscr.addstr("Password(*): \n")
@@ -236,6 +245,8 @@ def get_sign_up_details():
     email = stdscr.getstr(6, 10, 30)
 
     curses.noecho()
+    curses.curs_set(0)
+    stdscr.keypad(True)
 
     credentials.append(decode_utf_8(username))
     credentials.append(decode_utf_8(password))
@@ -253,11 +264,19 @@ def get_sign_in_details():
     stdscr.addstr("Insert your credentials\n\n", curses.A_UNDERLINE)
 
     curses.echo()
+    curses.curs_set(2)
+    stdscr.keypad(False)
+
+
     stdscr.addstr("Username: \n")
     stdscr.addstr("Password: ")
+
     username = stdscr.getstr(2, 10, 30)
     password = stdscr.getstr(3, 10, 30)
+
     curses.noecho()
+    curses.curs_set(0)
+    stdscr.keypad(True)
 
     userpasw.append(decode_utf_8(username))
     userpasw.append(decode_utf_8(password))
@@ -333,21 +352,18 @@ def run_sign_up_screen(server_reply):
             print_message_and_press_enter_to_continue("\nPress ENTER to continue..")
             break
 
-
-
 def run_client():
     login_color_attributes = init_curses_attributes()
-	
+
     screen_title = "Welcome traveler"
     screen_options = [UIText.SIGN_IN.value, UIText.SIGN_UP.value, UIText.EXIT.value]
     screen_option_index = -1
-	
+
     try:
         while screen_option_index != screen_options.index(UIText.EXIT.value):
 
             screen_option_index = select_option(login_color_attributes, screen_options, screen_title)
             choice = screen_options[screen_option_index]
-
             client.socket.send(encode_utf_8(choice))
 
             server_reply = client.socket.recv(1024)
@@ -360,14 +376,20 @@ def run_client():
             elif decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_UP.value):
                 run_sign_up_screen(server_reply)
 
+            elif decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.EXIT.value):
+                pass
+
+        return
+
     except BrokenPipeError as bpe:
         os.system("clear")
-        stdscr.addstr("Something happened to the Server. It is unreachable.\n{}\nConnection closed.\n".format(bpe))
+        stdscr.addstr("Server is crashed. << {} >>\nConnection closed.\n".format(bpe))
         print_message_and_press_enter_to_continue("Press ENTER..")
 
+    finally:
         client.close_my_connection()
         reset_curses_options()
-        exit(1)
+
 
 
 
@@ -379,7 +401,6 @@ signal.signal(signal.SIGINT, sigint_handler)
 parser = argparse.ArgumentParser()
 parser.add_argument("ip", help='type the server ip address')
 parser.add_argument("port", help='type the server listening port ')
-#parser.add_argument("output", help='type < terminal > or < file > to see the server outputs')
 args = parser.parse_args()
 
 
@@ -391,30 +412,30 @@ try:
     client.start_socket(args)
     client.connect_to_server(args.ip, int(args.port))
 
-    logged_user = LoggedUser()
+    logged_user = ProfileUser()
 
     run_client()
+
+
 
     #TODO: [...]
 
     client.close_my_connection()
-
     stdscr = reset_curses_options()
+
 
 except ConnectionRefusedError as cre:
     stdscr.addstr("Host unreachable.\n{}\n".format(cre))
     print_message_and_press_enter_to_continue("Press ENTER..")
 
-    
-    client.close_my_connection()
-    stdscr = reset_curses_options()
-
 except Exception as e:
     stdscr.addstr("Application aborted due to a fatal error.\n{}\n".format(e))
     print_message_and_press_enter_to_continue("Press ENTER..")
 
+finally:
     client.close_my_connection()
     stdscr = reset_curses_options()
+
 
 
 
