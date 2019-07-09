@@ -333,7 +333,7 @@ def handle_logged_user(client_socket, address,username_logged):
 		client_reply = client_socket.recv(1024)
 
 		if is_the_reply_ctrlc(decode_utf_8(client_reply)):
-			server.list_of_logs.append("	({}) {}:{} has disconnected: CTRL+C detected.".format(get_date_and_hour(), address[0], address[1]))
+			server.list_of_logs.append("	({}) {}:{} --> CRASHED".format(get_date_and_hour(), address[0], address[1]))
 			server.remove_connection(address[0], address[1])
 			server.remove_user_from_online_list(username_logged)
 			logged_loop = False
@@ -384,10 +384,9 @@ def handle_user_sign_up(client_reply,client_socket, address):
 		client_reply = client_socket.recv(1024)
 		server.list_of_logs.append("	({}) {}:{} --> Sign up details sent.".format(get_date_and_hour(), address[0], address[1]))
 		if is_the_reply_ctrlc(decode_utf_8(client_reply)):
-			server.list_of_logs.append("	({}) {}:{} has disconnected: CTRL+C detected.".format(get_date_and_hour(), address[0], address[1] ))
+			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
 			server.remove_connection(address[0], address[1])
-			server.close_client_connection(client_socket)
-			exit(1)
+			sign_up_loop = False
 
 		else:
 			splitted_details = decode_utf_8(client_reply).split(";")

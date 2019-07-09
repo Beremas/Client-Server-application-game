@@ -148,22 +148,23 @@ def init_curses_attributes():
 
 """HANDLER FUNCTIONS"""
 
-
-def sigint_handler(signum,frame):
+def send_nicer_good_bye():
     nice_good_bye_message = "CTRL+C"
     client.socket.send(encode_utf_8(nice_good_bye_message))
     client.close_my_connection()
     stdscr = reset_curses_options()
 
+def sigint_handler(signum,frame):
+    send_nicer_good_bye()
     exit(1)
 
 
 """EMBEDDED FUNCTIONS"""
 
 
-def select_option(attributes, screen_options,screen_title):
+def select_option(attributes, screen_options,screen_title, screen_marked_line):
     last_char_read = 0  # last character read
-    screen_marked_line = 0  # the current option that is marked
+    #screen_marked_line = 0  # the current option that is marked
     while last_char_read != 10:  # Enter in ascii
         stdscr.erase()
         stdscr.addstr("{}\n\n".format(screen_title), curses.A_UNDERLINE)
@@ -189,6 +190,38 @@ def load_user_profile(logged_user):
 
     return logged_user_profile
 
+def run_user_profile_screen():
+    login_color_attributes = init_curses_attributes()
+
+    screen_title = "Profile area"
+    screen_options = ["Username(*)", "Password(*)", "Gender", "Age", "Email(*)", "Save"]
+    screen_option_index = -1
+    last_option_pressed = 0
+
+    while screen_option_index != screen_options.index("Save"):
+        screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
+        last_option_pressed = screen_option_index
+
+        curses.echo()
+        stdscr.keypad(False)
+        curses.curs_set(2)
+
+        if screen_option_index == screen_options.index("Username(*)"):
+            username = decode_utf_8(stdscr.getstr(2, 15, 30))
+            new_string = "Username(*) = {}".format(username)
+            screen_options[0] = new_string
+        elif screen_option_index == screen_options.index("Password(*)"):
+            password = stdscr.getstr(3, 15, 30)
+        elif screen_option_index == screen_options.index("Gender"):
+            gender = stdscr.getstr(4, 10, 30)
+        elif screen_option_index == screen_options.index("Age"):
+            age = stdscr.getstr(5, 7, 30)
+        elif screen_option_index == screen_options.index("Email(*)"):
+            email = stdscr.getstr(6, 12, 30)
+
+        curses.noecho()
+        curses.curs_set(0)
+        stdscr.keypad(True)
 
 def run_user_logged_screen():
     login_color_attributes = init_curses_attributes()
@@ -196,9 +229,11 @@ def run_user_logged_screen():
     screen_title = "Hi " + logged_user.username
     screen_options = [UIText.PLAY_NEW_GAME.value, UIText.PLAY_COOP_GAME.value, UIText.CONTINUE_GAME.value, UIText.PROFILE.value, UIText.LOGOUT.value]
     screen_option_index = -1
+    last_option_pressed = 0
 
     while screen_option_index != screen_options.index(UIText.LOGOUT.value):
-        screen_option_index = select_option(login_color_attributes, screen_options, screen_title)
+        screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
+        last_option_pressed = screen_option_index
 
         client.socket.send(encode_utf_8(screen_options[screen_option_index]))
 
@@ -217,8 +252,8 @@ def run_user_logged_screen():
             print_message_and_press_enter_to_continue("Continue game - pressed\nPress ENTER to continue..")
 
         if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PROFILE.value):
-
-            print_message_and_press_enter_to_continue("Profile - pressed\nPress ENTER to continue..")
+            run_user_profile_screen()
+            #print_message_and_press_enter_to_continue("Profile - pressed\nPress ENTER to continue..")
 
 
         #TODO: [...]
@@ -363,11 +398,13 @@ def run_client():
     screen_title = "Welcome traveler"
     screen_options = [UIText.SIGN_IN.value, UIText.SIGN_UP.value, UIText.EXIT.value]
     screen_option_index = -1
+    last_option_pressed = 0
 
     try:
         while screen_option_index != screen_options.index(UIText.EXIT.value):
 
-            screen_option_index = select_option(login_color_attributes, screen_options, screen_title)
+            screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
+            last_option_pressed = screen_option_index
             choice = screen_options[screen_option_index]
             client.socket.send(encode_utf_8(choice))
 
