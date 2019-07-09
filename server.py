@@ -14,6 +14,7 @@ import re
 
 """CLASSES & ENUM"""
 
+
 class Server:
 	def __init__(self):
 		self.ip = ""
@@ -55,7 +56,7 @@ class Server:
 		print("Server specs:\n	ip: {}\n	port: {}\n	closed at: {}\nServer status: {}".format(server.ip, server.port, server.closedat, server.status))
 
 	def print_executable_commands(self):
-		print("Server executable <debug> commands: [online users, online connections, show/export logs, clear terminal, clear logs]\n")
+		print("Server executable <debug> commands: [online users, online connections, show/export logs, clear, clear logs]\n")
 
 	def print_online_connections(self):
 		if self.list_of_connection_details:
@@ -216,6 +217,7 @@ class ServerResponseStatus(Enum):
 	SIGNED = "Signed up"
 	USER_ALREADY_ONLINE = "User already online"
 
+
 class UIText(Enum):
 	PLAY_NEW_GAME = "Play new game"
 	PLAY_COOP_GAME = "Play coop game"
@@ -300,7 +302,6 @@ def init_curses_color_sets():
 
 def init_curses_menu_attributes():
 	attrib = {}
-
 	attrib['normal'] = curses.color_pair(1)
 	attrib['highlighted'] = curses.color_pair(2)
 	return attrib
@@ -320,8 +321,10 @@ def sigint_handler(signum, frame):
 def is_the_reply_ctrlc(client_reply):
 	return True if client_reply == "CTRL+C" else False
 
+
 def is_the_reply_exit(client_reply):
 	return True if client_reply == UIText.EXIT.value else False
+
 
 def handle_logged_user(client_socket, address,username_logged):
 	logged_loop = True
@@ -366,6 +369,7 @@ def handle_logged_user(client_socket, address,username_logged):
 				server.remove_user_from_online_list(username_logged)
 				logged_loop = False
 	return
+
 
 def handle_user_sign_up(client_reply,client_socket, address):
 	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
@@ -448,6 +452,7 @@ def handle_user_sign_up(client_reply,client_socket, address):
 
 					sign_up_loop = True
 
+
 def handle_user_sign_in(client_reply, client_socket, address):
 	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
@@ -490,18 +495,21 @@ def handle_user_sign_in(client_reply, client_socket, address):
 			server.list_of_logs.append("	({}) {}:{} <-- Sign in DENIED.".format(get_date_and_hour(), address[0], address[1]))
 			return None
 
+
 def handle_user_ctrlc_command(address):
 	server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1]))
 	server.remove_connection(address[0], address[1])
+
 
 def handle_user_exit_request(address):
 	server.list_of_logs.append("	({}) {}:{} --> DISCONNECTED.".format(get_date_and_hour(), address[0], address[1]))
 	server.remove_connection(address[0], address[1])
 
 
-def handle_exception_caught(address,ex_message):
+def handle_exception_caught(address, ex_message):
 	server.list_of_logs.append("	({}) {}:{} : {}.".format(get_date_and_hour(),address[0], address[1], ex_message))
 	server.remove_connection(address[0], address[1])
+
 
 def handle_closing_server():
 	while server.RUNNING:
@@ -514,8 +522,8 @@ def handle_closing_server():
 	server.close_my_connection()
 	exit(1)
 
-def handle_client_connection(client_socket, address):
 
+def handle_client_connection(client_socket, address):
 	current_client_running = True
 	try:
 		while current_client_running:
@@ -552,6 +560,7 @@ def handle_client_connection(client_socket, address):
 		server.remove_connection(address[0], address[1])
 		return
 
+
 def handle_server_terminal_commands():
 	while server.RUNNING:
 		command = input("Server terminal ~/: ")
@@ -565,7 +574,7 @@ def handle_server_terminal_commands():
 		elif command == "export logs" or command == "!e":
 			write_on_file("server.log", server.list_of_logs)
 			print("A server.log file has been created.")
-		elif command == "clear terminal" or command == "!ct":
+		elif command == "clear" or command == "!ct":
 			os.system("clear")
 			server.print_init_stats()
 			server.print_executable_commands()
@@ -575,9 +584,6 @@ def handle_server_terminal_commands():
 			pass
 		else:
 			print("Server terminal ~/: {} not recognised".format(command))
-
-
-
 
 
 os.system("clear")
@@ -612,7 +618,6 @@ threading.Thread(
 	).start()
 
 
-
 while server.RUNNING:
 	client_socket, address = server.socket.accept()
 	server.list_of_logs.append("	({}) {}:{} --> CONNECTED.".format(get_date_and_hour(), address[0], address[1]))
@@ -628,12 +633,3 @@ while server.RUNNING:
 
 	server.add_connection(user_handler, client_socket, address)
 	lock.release()
-
-
-
-
-
-
-
-
-

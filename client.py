@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import argparse
 import socket
 import signal
@@ -8,9 +7,9 @@ import curses
 import threading
 from enum import Enum
 from datetime import datetime
-from pynput import keyboard
 
 """CLASSES & ENUM"""
+
 
 class Client:
     def __init__(self):
@@ -20,7 +19,6 @@ class Client:
         self.closedat = ""
         self.shutdown_time = ""
         self.socket = ""
-
 
     def start_socket(self, args):
         self.startedat = get_date_and_hour()
@@ -34,6 +32,7 @@ class Client:
 
     def connect_to_server(self, ip, port):
         self.socket.connect((ip, port))
+
 
 class ProfileUser:
     def __init__(self):
@@ -58,6 +57,7 @@ class GameStats:
         self.kills = ""
         # [...]
 
+
 class ServerResponseStatus(Enum):
     ACK = "Acknowledge"
     DENY = "Deny"
@@ -65,6 +65,7 @@ class ServerResponseStatus(Enum):
     EMAIL_OR_USER_ALREADY_EXISTS = "Duplicate"
     SIGNED = "Signed up"
     USER_ALREADY_ONLINE = "User already online"
+
 
 class UIText(Enum):
     PLAY_NEW_GAME = "Play new game"
@@ -79,8 +80,10 @@ class UIText(Enum):
 
 """UTILITY FUNCTIONS"""
 
+
 def get_date_and_hour():
 	return datetime.today().strftime('%d-%d-%Y %H-%M-%S')
+
 
 def print_message_and_press_enter_to_continue(message):
     enter_pressed = False
@@ -90,14 +93,17 @@ def print_message_and_press_enter_to_continue(message):
         if char == 10:
             enter_pressed = True
 
+
 def decode_utf_8(item):
     return item.decode('utf-8')
+
 
 def encode_utf_8(item):
     return item.encode('utf-8')
 
 
 """CURSES FUNCTIONS"""
+
 
 def reset_curses_options():
     # reverse everything that you changed about the terminal
@@ -108,6 +114,7 @@ def reset_curses_options():
     curses.endwin()
 
     return stdscr
+
 
 def init_curses_options():
     # create a window object that represents the terminal window
@@ -120,19 +127,19 @@ def init_curses_options():
     stdscr.keypad(True)
     # Removue blinkin cursor
     curses.curs_set(0);
-
     init_curses_color_sets()
 
     return stdscr
+
 
 def init_curses_color_sets():
     curses.start_color()
     curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)
 
+
 def init_curses_attributes():
     attrib = {}
-
     attrib['normal'] = curses.color_pair(1)
     attrib['highlighted'] = curses.color_pair(2)
 
@@ -143,19 +150,16 @@ def init_curses_attributes():
 
 
 def sigint_handler(signum,frame):
-
     nice_good_bye_message = "CTRL+C"
-
     client.socket.send(encode_utf_8(nice_good_bye_message))
-
     client.close_my_connection()
-
     stdscr = reset_curses_options()
 
     exit(1)
 
 
 """EMBEDDED FUNCTIONS"""
+
 
 def select_option(attributes, screen_options,screen_title):
     last_char_read = 0  # last character read
@@ -178,11 +182,13 @@ def select_option(attributes, screen_options,screen_title):
 
     return screen_marked_line
 
-def load_user_profile(logged_user):
 
+def load_user_profile(logged_user):
     logged_user_profile = {}
     # TODO: [...]
+
     return logged_user_profile
+
 
 def run_user_logged_screen():
     login_color_attributes = init_curses_attributes()
@@ -219,24 +225,21 @@ def run_user_logged_screen():
 
     logged_user.reset_user()
 
-def get_sign_up_details():
 
+def get_sign_up_details():
     credentials = []
     stdscr.erase()
     stdscr.addstr("Register your details here. Fields with (*) are necessaries.\n\n", curses.A_UNDERLINE)
 
-
     curses.echo()
     stdscr.keypad(False)
     curses.curs_set(2)
-
 
     stdscr.addstr("Username(*): \n")
     stdscr.addstr("Password(*): \n")
     stdscr.addstr("Gender: \n")
     stdscr.addstr("Age: \n")
     stdscr.addstr("Email(*): ")
-
 
     username = stdscr.getstr(2, 13, 30)
     password = stdscr.getstr(3, 13, 30)
@@ -257,6 +260,7 @@ def get_sign_up_details():
     formatted_credentials = str(";".join(map(str, credentials)))
 
     return formatted_credentials
+
 
 def get_sign_in_details():
     userpasw = []
@@ -285,8 +289,8 @@ def get_sign_in_details():
 
     return credentials
 
-def run_sign_in_screen():
 
+def run_sign_in_screen():
     credentials =get_sign_in_details()
 
     client.socket.send(encode_utf_8(credentials))
@@ -313,8 +317,8 @@ def run_sign_in_screen():
 
         return True
 
-def run_sign_up_screen(server_reply):
 
+def run_sign_up_screen(server_reply):
     while decode_utf_8(server_reply) != ServerResponseStatus.SIGNED.value:
 
         new_user_details = get_sign_up_details()
@@ -351,6 +355,7 @@ def run_sign_up_screen(server_reply):
             stdscr.addstr("\nUser correctly registered!")
             print_message_and_press_enter_to_continue("\nPress ENTER to continue..")
             break
+
 
 def run_client():
     login_color_attributes = init_curses_attributes()
@@ -391,9 +396,6 @@ def run_client():
         reset_curses_options()
 
 
-
-
-
 # SIGNALS handler
 signal.signal(signal.SIGINT, sigint_handler)
 
@@ -416,8 +418,6 @@ try:
 
     run_client()
 
-
-
     #TODO: [...]
 
     client.close_my_connection()
@@ -435,20 +435,3 @@ except Exception as e:
 finally:
     client.close_my_connection()
     stdscr = reset_curses_options()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
