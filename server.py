@@ -160,7 +160,6 @@ class Server:
 
 		lock.release()
 
-
 	# thread safe
 	def save_user_credentials(self, user):
 		lock = Lock()
@@ -259,6 +258,7 @@ class UIText(Enum):
 	SIGN_UP = "Sign up"
 	EXIT = "Exit"
 	SAVE = "Save"
+	BACK = "Back"
 
 
 """UTILITY FUNCTIONS"""
@@ -363,12 +363,13 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 	client_socket.send(encode_utf_8(ack))
 	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
+	need_to_disconnect = False
+
 	profile_loop = True
 	while profile_loop is True:
-		# W8ING FOR THE SAVE BUTTONS + NEW DETAILS
+		# W8ING FOR THE SAVE/BACK button clicked
 		decoded_message  = decode_utf_8(client_socket.recv(1024))
 		client_reply_splitted = decoded_message.split("-")
-		server.list_of_logs.append("	({}) {}:{} --> Profile changed. New credential sent".format(get_date_and_hour(), address[0], address[1]))
 
 
 		if is_the_reply_ctrlc(decoded_message):
@@ -431,7 +432,7 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 				server.list_of_logs.append("	({}) {}:{} <-- New credentials saved.".format(get_date_and_hour(), address[0],address[1],))
 
 				profile_loop = False
-
+				need_to_disconnect = True
 			else:
 				already_signed = ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value
 				client_socket.send(encode_utf_8(already_signed))
@@ -439,6 +440,19 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 
 				profile_loop = True
 
+		elif client_reply_splitted[0] == UIText.BACK.value:
+
+			ack = ServerResponseStatus.ACK.value
+			client_socket.send(encode_utf_8(ack))
+			server.list_of_logs.append(
+				"	({}) {}:{} <-- No changes applied. Profile closed.".format(
+					get_date_and_hour(), address[0], address[1]))
+			profile_loop = False
+
+	if need_to_disconnect:
+		return True
+	else:
+		return False
 
 def handle_home(client_socket, address, username_logged):
 	logged_loop = True
@@ -473,9 +487,10 @@ def handle_home(client_socket, address, username_logged):
 
 			if decode_utf_8(client_reply) == UIText.PROFILE.value:
 
-				handle_profile(client_reply, client_socket, address, username_logged)
-				server.remove_user_from_online_list(username_logged)
-				logged_loop = False
+				need_to_disconnect = handle_profile(client_reply, client_socket, address, username_logged)
+				if need_to_disconnect:
+					server.remove_user_from_online_list(username_logged)
+					logged_loop = False
 
 			if decode_utf_8(client_reply) == UIText.LOGOUT.value:
 				ack = ServerResponseStatus.ACK.value
@@ -484,7 +499,8 @@ def handle_home(client_socket, address, username_logged):
 
 				server.remove_user_from_online_list(username_logged)
 				logged_loop = False
-	return
+
+
 
 
 def handle_sign_up(client_reply, client_socket, address):
