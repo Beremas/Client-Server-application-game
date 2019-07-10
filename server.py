@@ -364,18 +364,18 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 	need_to_disconnect = False
-
 	profile_loop = True
+
 	while profile_loop is True:
-		# W8ING FOR THE SAVE/BACK button clicked
+
 		decoded_message  = decode_utf_8(client_socket.recv(1024))
 		client_reply_splitted = decoded_message.split("-")
-
 
 		if is_the_reply_ctrlc(decoded_message):
 			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
 			server.remove_connection(address[0], address[1])
 			profile_loop = False
+			need_to_disconnect = client_is_crased = True
 
 		elif client_reply_splitted[0] == UIText.SAVE.value:
 
@@ -456,7 +456,6 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 
 def handle_home(client_socket, address, username_logged):
 	logged_loop = True
-
 	while logged_loop is True:
 
 		client_reply = client_socket.recv(1024)
@@ -487,8 +486,8 @@ def handle_home(client_socket, address, username_logged):
 
 			if decode_utf_8(client_reply) == UIText.PROFILE.value:
 
-				need_to_disconnect = handle_profile(client_reply, client_socket, address, username_logged)
-				if need_to_disconnect:
+				need_to_disconnect_the_client_or_quit_the_loop = handle_profile(client_reply, client_socket, address, username_logged)
+				if need_to_disconnect_the_client_or_quit_the_loop:
 					server.remove_user_from_online_list(username_logged)
 					logged_loop = False
 
@@ -499,8 +498,6 @@ def handle_home(client_socket, address, username_logged):
 
 				server.remove_user_from_online_list(username_logged)
 				logged_loop = False
-
-
 
 
 def handle_sign_up(client_reply, client_socket, address):
