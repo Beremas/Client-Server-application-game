@@ -363,7 +363,8 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 	client_socket.send(encode_utf_8(ack))
 	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
-	need_to_disconnect = False
+	need_to_disconnect_the_client = False
+	client_is_crashed = False
 	profile_loop = True
 
 	while profile_loop is True:
@@ -375,7 +376,7 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
 			server.remove_connection(address[0], address[1])
 			profile_loop = False
-			need_to_disconnect = client_is_crased = True
+			client_is_crashed = True
 
 		elif client_reply_splitted[0] == UIText.SAVE.value:
 
@@ -449,7 +450,7 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 					get_date_and_hour(), address[0], address[1]))
 			profile_loop = False
 
-	if need_to_disconnect:
+	if need_to_disconnect_the_client or client_is_crashed:
 		return True
 	else:
 		return False
