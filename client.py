@@ -20,34 +20,47 @@ class Client:
         self.shutdown_time = ""
         self.socket = ""
 
-    def start_socket(self, args):
+    class UserDetails:
+        def __init__(self):
+            self.username = ""
+            self.password = ""
+            self.gender = ""
+            self.age = ""
+            self.email = ""
+
+        def reset_user(self):
+            self.username = ""
+            self.password = ""
+            self.gender = ""
+            self.age = ""
+            self.email = ""
+
+        def get_gender(self):
+            return self.gender
+
+    def init_socket(self, args):
         self.startedat = get_date_and_hour()
         self.closedat = ""
         self.server_ip = args.ip
         self.server_port = int(args.port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def close_my_connection(self):
+    def start_user_interface(self):
+        run_client()
+
+    def close_socket(self):
         client.socket.close()
 
-    def connect_to_server(self, ip, port):
+    def connect_to(self, ip, port):
         self.socket.connect((ip, port))
 
+    def send_encoded_message_via_socket(self, message):
+        client.socket.send(encode_utf_8(message))
 
-class ProfileUser:
-    def __init__(self):
-        self.username = ""
-        self.password = ""
-        self.gender = ""
-        self.age = ""
-        self.email = ""
+    def read_decoded_message_via_socket(self):
+        return decode_utf_8(client.socket.recv(1024))
 
-    def reset_user(self):
-        self.username = ""
-        self.password = ""
-        self.gender = ""
-        self.age = ""
-        self.email = ""
+
 
 
 class GameStats:
@@ -107,7 +120,7 @@ def encode_utf_8(item):
 """CURSES FUNCTIONS"""
 
 
-def reset_curses_options():
+def reset_curses():
     # reverse everything that you changed about the terminal
     curses.nocbreak()
     stdscr.keypad(False)
@@ -118,7 +131,7 @@ def reset_curses_options():
     return stdscr
 
 
-def init_curses_options():
+def init_curses():
     # create a window object that represents the terminal window
     stdscr = curses.initscr()
     # Don't print what I type on the terminal
@@ -154,8 +167,8 @@ def init_curses_attributes():
 def send_nicer_good_bye():
     nice_good_bye_message = "CTRL+C"
     client.socket.send(encode_utf_8(nice_good_bye_message))
-    client.close_my_connection()
-    stdscr = reset_curses_options()
+    client.close_socket()
+    stdscr = reset_curses()
 
 
 def sigint_handler(signum,frame):
@@ -188,26 +201,35 @@ def select_option(attributes, screen_options, screen_title, screen_marked_line):
     return screen_marked_line
 
 
+def get_from_server_all_user_details():
+    #client.UserDetails.username
+    #client.UserDetails.username
+    client.UserDetails.gender = ""
+    client.UserDetails.age = ""
+    client.UserDetails.email = ""
+
+
 def profile_screen():
 
     login_color_attributes = init_curses_attributes()
 
-    screen_title = "Profile area"
-    screen_options = ["Username(*) = " + user_details.username,"Password(*) = " + user_details.password,"Gender = " + user_details.gender,"Age = " + user_details.age,"Email(*) = " + user_details.email,"Save","Back"]
+    get_from_server_all_user_details()
 
-    username = user_details.username
-    password = user_details.password
-    gender = user_details.gender
-    age = user_details.age
-    email = user_details.email
+    username = client.UserDetails.username
+    password = client.UserDetails.password
+    gender = client.UserDetails.gender
+    age = client.UserDetails.age
+    email = client.UserDetails.email
+
+    screen_title = "Profile area"
+    screen_options = ["Username(*) = " + username, "Password(*) = " + password, "Gender = " + gender, "Age = " + age, "Email(*) = " + email, "Save", "Back" ]
+
 
     loop_for_the_correct_details = True
-
     while loop_for_the_correct_details:
 
         screen_option_index = -1
         last_option_pressed = 0
-
 
         while screen_option_index != screen_options.index("Save") and screen_option_index != screen_options.index("Back"):
             screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
@@ -295,6 +317,7 @@ def profile_screen():
     if screen_option_index == screen_options.index("Back"):
         no_need_to_disconnect = False
         return no_need_to_disconnect
+
     elif screen_option_index == screen_options.index("Save"):
         need_to_disconnect = True
         return need_to_disconnect
@@ -303,8 +326,8 @@ def profile_screen():
 def home_screen():
     login_color_attributes = init_curses_attributes()
 
-    screen_title = "Hi " + user_details.username
-    screen_options = [UIText.PLAY_NEW_GAME.value, UIText.PLAY_COOP_GAME.value, UIText.CONTINUE_GAME.value, UIText.PROFILE.value, UIText.LOGOUT.value]
+    screen_title = "Home screen. Player: " + client.UserDetails.username
+    screen_options = [UIText.CONTINUE_GAME.value, UIText.PLAY_NEW_GAME.value, UIText.PLAY_COOP_GAME.value, UIText.PROFILE.value, UIText.LOGOUT.value]
     screen_option_index = -1
     last_option_pressed = 0
 
@@ -334,9 +357,6 @@ def home_screen():
             if need_disconnect_and_reconnect:
                 print_message_and_press_enter_to_continue("\nYou need to Sign in again in order to use use your changes. You will be redirected on the main screen.")
                 screen_option_index = 4
-
-
-    user_details.reset_user()
 
 
 def get_sign_up_details():
@@ -404,30 +424,32 @@ def get_sign_in_details():
 
 
 def sign_in_screen():
-    credentials =get_sign_in_details()
+    credentials = get_sign_in_details()
 
-    client.socket.send(encode_utf_8(credentials))
+    client.send_encoded_message_via_socket(credentials)
 
-    server_reply = client.socket.recv(1024)
+    server_reply = client.read_decoded_message_via_socket()
 
-    if decode_utf_8(server_reply) == ServerResponseStatus.DENY.value:
+
+    if server_reply == ServerResponseStatus.DENY.value:
         stdscr.addstr("\nWrong credentials!")
         print_message_and_press_enter_to_continue("\nPress ENTER..")
-
         return False
 
-    if decode_utf_8(server_reply) == ServerResponseStatus.USER_ALREADY_ONLINE.value:
+    if server_reply == ServerResponseStatus.USER_ALREADY_ONLINE.value:
         stdscr.addstr("\nThis user is already online! This action will be logged.")
         print_message_and_press_enter_to_continue("\nPress ENTER..")
-
         return False
 
-    if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value:
+    if server_reply == ServerResponseStatus.ACK.value:
         stdscr.addstr("\nCredentials accepted!")
         print_message_and_press_enter_to_continue("\nPress ENTER..")
 
         splitted_credentials = credentials.split(";")
-        user_details.username = splitted_credentials[0]
+        client.UserDetails.username = splitted_credentials[0]
+        client.UserDetails.password = splitted_credentials[1]
+
+
 
         return True
 
@@ -479,36 +501,33 @@ def run_client():
     screen_option_index = -1
     last_option_pressed = 0
 
-    try:
-        while screen_option_index != screen_options.index(UIText.EXIT.value):
+    while screen_option_index != screen_options.index(UIText.EXIT.value):
 
-            screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
-            last_option_pressed = screen_option_index
-            choice = screen_options[screen_option_index]
-            client.socket.send(encode_utf_8(choice))
+        screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
 
-            server_reply = client.socket.recv(1024)
+        last_option_pressed = screen_option_index
 
-            if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_IN.value):
-                if sign_in_screen():
-                    home_screen()
+        choice = screen_options[screen_option_index]
 
-            elif decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_UP.value):
-                sign_up_screen(server_reply)
+        client.send_encoded_message_via_socket(choice)
 
-            elif decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.EXIT.value):
-                pass
+        server_reply = client.read_decoded_message_via_socket()
 
-        return
 
-    except BrokenPipeError as bpe:
-        os.system("clear")
-        stdscr.addstr("Server is crashed. << {} >>\nConnection closed.\n".format(bpe))
-        print_message_and_press_enter_to_continue("Press ENTER..")
+        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_IN.value):
+            if sign_in_screen():
+                home_screen()
 
-    finally:
-        client.close_my_connection()
-        reset_curses_options()
+        elif server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_UP.value):
+            sign_up_screen(server_reply)
+
+        elif server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.EXIT.value):
+            pass
+
+
+
+    return
+
 
 
 # SIGNALS handler
@@ -523,31 +542,34 @@ args = parser.parse_args()
 
 try:
 
-    stdscr = init_curses_options()
+    stdscr = init_curses()
 
     client = Client()
-    client.start_socket(args)
-    client.connect_to_server(args.ip, int(args.port))
 
-    user_details = ProfileUser()
+    client.init_socket(args)
 
-    run_client()
+    client.connect_to(args.ip, int(args.port))
 
-    #TODO: [...]
+    client.start_user_interface()
 
-    client.close_my_connection()
-    stdscr = reset_curses_options()
+    client.close_socket()
+
+    stdscr = reset_curses()
 
 
 except ConnectionRefusedError as cre:
     stdscr.addstr("Host unreachable.\n{}\n".format(cre))
     print_message_and_press_enter_to_continue("Press ENTER..")
 
-except Exception as e:
+except BrokenPipeError as bpe:
+    os.system("clear")
+    stdscr.addstr("Server is crashed. << {} >>\nConnection closed.\n".format(bpe))
+    print_message_and_press_enter_to_continue("Press ENTER..")
 
+except Exception as e:
     stdscr.addstr("Application aborted due to a fatal error.\n{}\n".format(e))
     print_message_and_press_enter_to_continue("Press ENTER..")
 
 finally:
-    client.close_my_connection()
-    stdscr = reset_curses_options()
+    client.close_socket()
+    stdscr = reset_curses()
