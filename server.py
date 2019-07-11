@@ -30,7 +30,7 @@ class Server:
 		self.list_of_online_users = []
 		self.list_of_logs = []
 
-	def start_socket(self, args):
+	def init_socket(self, args):
 		self.startedat = get_date_and_hour()
 		self.closedat = ""
 		self.ip = args.ip
@@ -43,7 +43,7 @@ class Server:
 	def close_client_connection(self, client_socket):
 		client_socket.close()
 
-	def close_my_connection(self):
+	def close_scoket(self):
 		self.socket.close()
 
 	def print_init_stats(self):
@@ -239,6 +239,11 @@ class Server:
 
 		lock.release()
 
+	def close_all_connections(self):
+		for connection in self.list_of_connection_details:
+			clientSocketExcracted = connection.get("CLIENT SOCKET")
+			clientSocketExcracted.close()
+
 class ServerResponseStatus(Enum):
 	ACK = "Acknowledge"
 	DENY = "Deny"
@@ -262,6 +267,7 @@ class UIText(Enum):
 
 
 """UTILITY FUNCTIONS"""
+
 
 def get_date_and_hour():
 	return datetime.today().strftime('%d-%d-%Y %H-%M-%S')
@@ -301,49 +307,16 @@ def encode_utf_8(item):
 	return item.encode('utf-8')
 
 
-"""CURSES FUNCTIONS"""
-
-
-def reset_curses_options():
-    # reverse everything that you changed about the terminal
-    curses.nocbreak()
-    stdscr.keypad(False)
-    curses.echo()
-    # restore the terminal to its original state
-    curses.endwin()
-
-
-def init_curses_options():
-    # create a window object that represents the terminal window
-    stdscr = curses.initscr()
-    # Don't print what I type on the terminal
-    curses.noecho()
-    # React to every key press, not just when pressing "enter"
-    curses.cbreak()
-    # Enable easy key codes (will come back to this)
-    stdscr.keypad(True)
-
-    return stdscr
-
-
-def init_curses_color_sets():
-    curses.start_color()
-    curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
-    curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)
-
-
-def init_curses_menu_attributes():
-	attrib = {}
-	attrib['normal'] = curses.color_pair(1)
-	attrib['highlighted'] = curses.color_pair(2)
-	return attrib
-
-
 """HANDLER FUNCTIONS"""
 
+def close_server():
+	server.RUNNING = False
+	server.close_all_connections()
+	server.print_closing_stats()
+	server.close_scoket()
 
 def sigint_handler(signum, frame):
-	server.RUNNING = False
+	close_server()
 	exit(1)
 
 
@@ -358,10 +331,10 @@ def is_the_reply_exit(client_reply):
 	return True if client_reply == UIText.EXIT.value else False
 
 
-def handle_profile(client_reply, client_socket, address, username_logged):
+def handle_profile_screen(client_reply, client_socket, address, username_logged):
 	ack = ServerResponseStatus.ACK.value
 	client_socket.send(encode_utf_8(ack))
-	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
 	need_to_disconnect_the_client = False
 	client_is_crashed = False
@@ -369,10 +342,10 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 
 	while profile_loop is True:
 
-		decoded_message  = decode_utf_8(client_socket.recv(1024))
-		client_reply_splitted = decoded_message.split("-")
+		client_reply = decode_utf_8(client_socket.recv(1024))
+		client_reply_splitted = client_reply.split("-")
 
-		if is_the_reply_ctrlc(decoded_message):
+		if is_the_reply_ctrlc(client_reply_splitted):
 			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
 			server.remove_connection(address[0], address[1])
 			profile_loop = False
@@ -433,7 +406,7 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 				server.list_of_logs.append("	({}) {}:{} <-- New credentials saved.".format(get_date_and_hour(), address[0],address[1],))
 
 				profile_loop = False
-				need_to_disconnect = True
+				need_to_disconnect_the_client = True
 			else:
 				already_signed = ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value
 				client_socket.send(encode_utf_8(already_signed))
@@ -455,72 +428,75 @@ def handle_profile(client_reply, client_socket, address, username_logged):
 	else:
 		return False
 
-def handle_home(client_socket, address, username_logged):
+
+def handle_home_screen(client_socket, address, username_logged):
 	logged_loop = True
 	while logged_loop is True:
 
-		client_reply = client_socket.recv(1024)
+		client_reply = decode_utf_8(client_socket.recv(1024))
 
-		if is_the_reply_ctrlc(decode_utf_8(client_reply)):
+		if is_the_reply_ctrlc(client_reply):
 			server.list_of_logs.append("	({}) {}:{} --> CRASHED".format(get_date_and_hour(), address[0], address[1]))
 			server.remove_connection(address[0], address[1])
 			server.remove_user_from_online_list(username_logged)
 			logged_loop = False
 
 		else:
-			server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+			server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1],client_reply ))
 
-			if decode_utf_8(client_reply) == UIText.PLAY_NEW_GAME.value:
+			if client_reply == UIText.PLAY_NEW_GAME.value:
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
-				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format( get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format( get_date_and_hour(), address[0], address[1], client_reply))
 
-			if decode_utf_8(client_reply) == UIText.PLAY_COOP_GAME.value:
+			if client_reply == UIText.PLAY_COOP_GAME.value:
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
-				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
-			if decode_utf_8(client_reply) == UIText.CONTINUE_GAME.value:
+			if client_reply == UIText.CONTINUE_GAME.value:
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
-				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
-			if decode_utf_8(client_reply) == UIText.PROFILE.value:
+			if client_reply == UIText.PROFILE.value:
 
-				need_to_disconnect_the_client_or_quit_the_loop = handle_profile(client_reply, client_socket, address, username_logged)
+				need_to_disconnect_the_client_or_quit_the_loop = handle_profile_screen(client_reply, client_socket, address, username_logged)
 				if need_to_disconnect_the_client_or_quit_the_loop:
 					server.remove_user_from_online_list(username_logged)
 					logged_loop = False
 
-			if decode_utf_8(client_reply) == UIText.LOGOUT.value:
+			if client_reply == UIText.LOGOUT.value:
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
-				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+				server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
 				server.remove_user_from_online_list(username_logged)
 				logged_loop = False
 
 
-def handle_sign_up(client_reply, client_socket, address):
+def handle_sign_up_screen(client_reply, client_socket, address):
 	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 	ack = ServerResponseStatus.ACK.value
+
 	client_socket.send(encode_utf_8(ack))
+
 	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
 
 	sign_up_loop = True
 	while sign_up_loop is True:
 
-		client_reply = client_socket.recv(1024)
+		client_reply = decode_utf_8(client_socket.recv(1024))
 		server.list_of_logs.append("	({}) {}:{} --> Sign up details sent.".format(get_date_and_hour(), address[0], address[1]))
 
-		if is_the_reply_ctrlc(decode_utf_8(client_reply)):
+		if is_the_reply_ctrlc(client_reply):
 			server.list_of_logs.append("	({}) {}:{} --> CRASHED.".format(get_date_and_hour(), address[0], address[1] ))
 			server.remove_connection(address[0], address[1])
 			sign_up_loop = False
 
 		else:
-			splitted_details = decode_utf_8(client_reply).split(";")
+			splitted_details = client_reply.split(";")
 
 			username = splitted_details[0]
 			password = splitted_details[1]
@@ -584,25 +560,26 @@ def handle_sign_up(client_reply, client_socket, address):
 					sign_up_loop = True
 
 
-def handle_sign_in(client_reply, client_socket, address):
-	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+def handle_sign_in_screen(client_reply, client_socket, address):
+	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
 	ack = ServerResponseStatus.ACK.value
 	client_socket.send(encode_utf_8(ack))
-	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
-	client_reply = client_socket.recv(1024)
+	client_reply = decode_utf_8(client_socket.recv(1024))
 	server.list_of_logs.append("	({}) {}:{} --> Sign in credentials sent.".format(get_date_and_hour(), address[0], address[1]))
 
-	if is_the_reply_ctrlc(decode_utf_8(client_reply)):
+	if is_the_reply_ctrlc(client_reply):
 		server.list_of_logs.append("	({}) {}:{} has disconnected: CTRL+C detected.".format(get_date_and_hour(), address[0], address[1]))
 		server.remove_connection(address[0], address[1])
 		server.close_client_connection(client_socket)
-		exit(1)
+
+		msg = None
 
 	else:
 
-		splitted_credential = decode_utf_8(client_reply).split(";")
+		splitted_credential = client_reply.split(";")
 		username = splitted_credential[0]
 		password = splitted_credential[1]
 
@@ -613,17 +590,23 @@ def handle_sign_in(client_reply, client_socket, address):
 				client_socket.send(encode_utf_8(rejected))
 				server.list_of_logs.append("	({}) {}:{} <-- Sign in REJECTED - User already online.".format(get_date_and_hour(), address[0], address[1]))
 
+				msg = None
+
 			else:
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
 				server.list_of_logs.append("	({}) {}:{} <-- Sign in VALIDATED.".format(get_date_and_hour(), address[0], address[1] ))
 				server.add_user_to_online_list(username)
-				return username
+
+				msg = username
 		else:
 			deny = ServerResponseStatus.DENY.value
 			client_socket.send(encode_utf_8(deny))
 			server.list_of_logs.append("	({}) {}:{} <-- Sign in DENIED.".format(get_date_and_hour(), address[0], address[1]))
-			return None
+
+			msg = None
+
+	return msg
 
 
 def handle_client_ctrlc_request(address):
@@ -636,21 +619,9 @@ def handle_client_exit_request(address):
 	server.remove_connection(address[0], address[1])
 
 
-def handle_exception_caught(address, ex_message):
+def handle_any_exception(address, ex_message):
 	server.list_of_logs.append("	({}) {}:{} : {}.".format(get_date_and_hour(),address[0], address[1], ex_message))
 	server.remove_connection(address[0], address[1])
-
-
-def handle_closing_server():
-	while server.RUNNING:
-		pass
-	for connection in server.list_of_connection_details:
-		clientSocketExcracted = connection.get("CLIENT SOCKET")
-		clientSocketExcracted.close()
-
-	server.print_closing_stats()
-	server.close_my_connection()
-	exit(1)
 
 
 def handle_client_connection(client_socket, address):
@@ -658,34 +629,34 @@ def handle_client_connection(client_socket, address):
 	try:
 		while current_client_running:
 
-			client_replay = client_socket.recv(1024)
+			client_reply = decode_utf_8(client_socket.recv(1024))
 
-			if is_the_reply_ctrlc(decode_utf_8(client_replay)):
+			if is_the_reply_ctrlc(client_reply):
 				handle_client_ctrlc_request(address)
 				current_client_running = False
 
-			elif is_the_reply_exit(decode_utf_8(client_replay)):
+			elif is_the_reply_exit(client_reply):
 				handle_client_exit_request(address)
 				ack = ServerResponseStatus.ACK.value
 				client_socket.send(encode_utf_8(ack))
 				current_client_running = False
 
-			elif UIText.SIGN_UP.value == decode_utf_8(client_replay):
-				handle_sign_up(client_replay, client_socket, address)
+			elif client_reply == UIText.SIGN_UP.value:
+				handle_sign_up_screen(client_reply, client_socket, address)
 
-			elif UIText.SIGN_IN.value == decode_utf_8(client_replay):
-				username_logged = handle_sign_in(client_replay, client_socket, address)
-				if username_logged:
-					handle_home(client_socket, address, username_logged)
+			elif client_reply == UIText.SIGN_IN.value:
+				username = handle_sign_in_screen(client_reply, client_socket, address)
+				if username:
+					handle_home_screen(client_socket, address, username)
 
 	except socket.error as sock_er:
-		handle_exception_caught(address, sock_er)
+		handle_any_exception(address, sock_er)
 
 	except IOError as ioe:
 		if ioe.errno == errno.EPIPE:
-			handle_exception_caught(address, ioe)
+			handle_any_exception(address, ioe)
 		else:
-			handle_exception_caught(address, ioe)
+			handle_any_exception(address, ioe)
 	finally:
 		server.remove_connection(address[0], address[1])
 		return
@@ -733,19 +704,14 @@ args = parser.parse_args()
 
 
 server.RUNNING = True
-server.start_socket(args)
+server.init_socket(args)
 server.print_init_stats()
 server.print_executable_commands()
 
 
 threading.Thread(
-		target=handle_server_terminal_commands
-	).start()
-
-
-threading.Thread(
-		target=handle_closing_server
-	).start()
+	target=handle_server_terminal_commands
+).start()
 
 
 while server.RUNNING:
@@ -763,3 +729,5 @@ while server.RUNNING:
 
 	server.add_connection(user_handler, client_socket, address)
 	lock.release()
+
+

@@ -200,7 +200,7 @@ def select_option(attributes, screen_options, screen_title, screen_marked_line):
 
     return screen_marked_line
 
-
+#TODO: NOT COMPLETED YET
 def get_from_server_all_user_details():
     #client.UserDetails.username
     #client.UserDetails.username
@@ -240,23 +240,23 @@ def profile_screen():
             curses.curs_set(2)
 
             if screen_option_index == screen_options.index(screen_options[0]):
-                username = decode_utf_8(stdscr.getstr(2, 18, 30)).strip()
+                username = decode_utf_8(stdscr.getstr(2, 17, 30)).strip()
                 screen_options[0] = "Username(*)" + " = " + username
 
             elif screen_option_index == screen_options.index(screen_options[1]):
-                password = decode_utf_8(stdscr.getstr(3, 18, 30)).strip()
+                password = decode_utf_8(stdscr.getstr(3, 17, 30)).strip()
                 screen_options[1] = "Password(*)" + " = " + password
 
             elif screen_option_index == screen_options.index(screen_options[2]):
-                gender = decode_utf_8(stdscr.getstr(4, 13, 30)).strip()
+                gender = decode_utf_8(stdscr.getstr(4, 12, 30)).strip()
                 screen_options[2] = "Gender" + " = " + gender
 
             elif screen_option_index == screen_options.index(screen_options[3]):
-                age = decode_utf_8(stdscr.getstr(5, 10, 30)).strip()
+                age = decode_utf_8(stdscr.getstr(5, 19, 30)).strip()
                 screen_options[3] = "Age" + " = " + age
 
             elif screen_option_index == screen_options.index(screen_options[4]):
-                email = decode_utf_8(stdscr.getstr(6, 15, 30)).strip()
+                email = decode_utf_8(stdscr.getstr(6, 14, 30)).strip()
                 screen_options[4] = "Email(*)" + " = " + email
 
             curses.noecho()
@@ -272,21 +272,22 @@ def profile_screen():
             new_details.append(email)
 
             formatted_credentials = str(";".join(map(str, new_details)))
+
             message_for_the_server = UIText.SAVE.value + "-" + formatted_credentials
 
-            client.socket.send(encode_utf_8(message_for_the_server))
+            client.send_encoded_message_via_socket(message_for_the_server)
 
-            server_reply = client.socket.recv(1024)
+            server_reply = client.read_decoded_message_via_socket()
 
-            if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value:
+            if server_reply == ServerResponseStatus.ACK.value:
                 print_message_and_press_enter_to_continue("\nNew details saved.")
                 loop_for_the_correct_details = False
-            elif decode_utf_8(server_reply) == ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value:
+
+            elif server_reply == ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value:
                 print_message_and_press_enter_to_continue("\nThis username or email already exists.")
                 loop_for_the_correct_details = True
             else:
-                decoded_message = decode_utf_8(server_reply)
-                splitted_message = decoded_message.split(";")
+                splitted_message = server_reply.split(";")
                 if splitted_message[0] == ServerResponseStatus.WRONG_USER_DETAILS.value:
                     stdscr.addstr("\n\nServer response:")
                     if "0" in splitted_message[1]:
@@ -307,12 +308,14 @@ def profile_screen():
 
             message_for_the_server = UIText.BACK.value
 
-            client.socket.send(encode_utf_8(message_for_the_server))
+            client.send_encoded_message_via_socket(message_for_the_server)
 
-            server_reply = client.socket.recv(1024)
+            server_reply = client.read_decoded_message_via_socket()
 
-            if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value:
+            if server_reply == ServerResponseStatus.ACK.value:
                 loop_for_the_correct_details = False
+
+
 
     if screen_option_index == screen_options.index("Back"):
         no_need_to_disconnect = False
@@ -335,23 +338,23 @@ def home_screen():
         screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
         last_option_pressed = screen_option_index
 
-        client.socket.send(encode_utf_8(screen_options[screen_option_index]))
+        client.send_encoded_message_via_socket((screen_options[screen_option_index]))
 
-        server_reply = client.socket.recv(1024)
+        server_reply = client.read_decoded_message_via_socket()
 
-        if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PLAY_NEW_GAME.value):
+        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PLAY_NEW_GAME.value):
 
             print_message_and_press_enter_to_continue("Play new game - pressed\nPress ENTER to continue..")
 
-        if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PLAY_COOP_GAME.value):
+        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PLAY_COOP_GAME.value):
 
             print_message_and_press_enter_to_continue("Play coop game - pressed\nPress ENTER to continue..")
 
-        if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.CONTINUE_GAME.value):
+        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.CONTINUE_GAME.value):
 
             print_message_and_press_enter_to_continue("Continue game - pressed\nPress ENTER to continue..")
 
-        if decode_utf_8(server_reply) == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PROFILE.value):
+        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.PROFILE.value):
 
             need_disconnect_and_reconnect = profile_screen()
             if need_disconnect_and_reconnect:
@@ -424,6 +427,7 @@ def get_sign_in_details():
 
 
 def sign_in_screen():
+
     credentials = get_sign_in_details()
 
     client.send_encoded_message_via_socket(credentials)
@@ -437,7 +441,7 @@ def sign_in_screen():
         return False
 
     if server_reply == ServerResponseStatus.USER_ALREADY_ONLINE.value:
-        stdscr.addstr("\nThis user is already online! This action will be logged.")
+        stdscr.addstr("\nThis user is already online!")
         print_message_and_press_enter_to_continue("\nPress ENTER..")
         return False
 
@@ -448,24 +452,20 @@ def sign_in_screen():
         splitted_credentials = credentials.split(";")
         client.UserDetails.username = splitted_credentials[0]
         client.UserDetails.password = splitted_credentials[1]
-
-
-
         return True
 
 
 def sign_up_screen(server_reply):
-    while decode_utf_8(server_reply) != ServerResponseStatus.SIGNED.value:
+
+    while server_reply != ServerResponseStatus.SIGNED.value:
 
         new_user_details = get_sign_up_details()
 
-        print_message_and_press_enter_to_continue("\nPress ENTER to send.")
+        client.send_encoded_message_via_socket(new_user_details)
 
-        client.socket.send(encode_utf_8(new_user_details))
+        server_reply = client.read_decoded_message_via_socket()
 
-        server_reply = client.socket.recv(1024)
-
-        server_response_splitted = decode_utf_8(server_reply).split(";")
+        server_response_splitted = server_reply.split(";")
 
         if server_response_splitted[0] == ServerResponseStatus.WRONG_USER_DETAILS.value:
             stdscr.addstr("\n\nServer response:")
@@ -482,46 +482,44 @@ def sign_up_screen(server_reply):
 
             print_message_and_press_enter_to_continue("\n\nPress ENTER..")
 
-        elif decode_utf_8(server_reply) == ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value:
+        elif server_reply == ServerResponseStatus.EMAIL_OR_USER_ALREADY_EXISTS.value:
             stdscr.addstr("\nUsername or email already exits.")
             print_message_and_press_enter_to_continue("\nPress ENTER to continue..")
 
-
-        elif decode_utf_8(server_reply) == ServerResponseStatus.SIGNED.value:
+        elif server_reply == ServerResponseStatus.SIGNED.value:
             stdscr.addstr("\nUser correctly registered!")
             print_message_and_press_enter_to_continue("\nPress ENTER to continue..")
-            break
 
 
 def run_client():
     login_color_attributes = init_curses_attributes()
 
     screen_title = "Welcome traveler"
-    screen_options = [UIText.SIGN_IN.value, UIText.SIGN_UP.value, UIText.EXIT.value]
+    screen_options_names = [UIText.SIGN_IN.value, UIText.SIGN_UP.value, UIText.EXIT.value]
     screen_option_index = -1
     last_option_pressed = 0
 
-    while screen_option_index != screen_options.index(UIText.EXIT.value):
+    while screen_option_index != screen_options_names.index(UIText.EXIT.value):
 
-        screen_option_index = select_option(login_color_attributes, screen_options, screen_title, last_option_pressed)
+        screen_option_index = select_option(login_color_attributes, screen_options_names, screen_title, last_option_pressed)
 
         last_option_pressed = screen_option_index
 
-        choice = screen_options[screen_option_index]
+        choice = screen_options_names[screen_option_index]
 
         client.send_encoded_message_via_socket(choice)
 
         server_reply = client.read_decoded_message_via_socket()
 
 
-        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_IN.value):
+        if server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options_names.index(UIText.SIGN_IN.value):
             if sign_in_screen():
                 home_screen()
 
-        elif server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.SIGN_UP.value):
+        elif server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options_names.index(UIText.SIGN_UP.value):
             sign_up_screen(server_reply)
 
-        elif server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options.index(UIText.EXIT.value):
+        elif server_reply == ServerResponseStatus.ACK.value and screen_option_index == screen_options_names.index(UIText.EXIT.value):
             pass
 
 
