@@ -476,13 +476,13 @@ def handle_home_screen(client_socket, address, username_logged):
 
 
 def handle_sign_up_screen(client_reply, client_socket, address):
-	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+	server.list_of_logs.append("	({}) {}:{} --> {} requested.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
 	ack = ServerResponseStatus.ACK.value
 
 	client_socket.send(encode_utf_8(ack))
 
-	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], decode_utf_8(client_reply)))
+	server.list_of_logs.append("	({}) {}:{} <-- ACK {}.".format(get_date_and_hour(), address[0], address[1], client_reply))
 
 	sign_up_loop = True
 	while sign_up_loop is True:
